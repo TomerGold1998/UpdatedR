@@ -299,8 +299,9 @@ namespace MyBot
 
         }
 
-        public void DefualtStrategy()
+        public void DefaultStrategy()
         {
+            List<Pirate> UsedPirates = new List<Pirate>();
             CA = new CollisionAvoider(this.Game);
             CA.init();
             CA.Reset();
@@ -310,7 +311,7 @@ namespace MyBot
 
             #region Stratgey Picker
 
-            #endregion
+            #endregion // Need To Do
 
             #region Return Pirates With Tresures
             foreach (Pirate mp in Game.MyPiratesWithTreasures())
@@ -320,12 +321,42 @@ namespace MyBot
                     DefualtActionSailHome sailhome = new DefualtActionSailHome(mp, Game, CA);
                     sailhome.DoMove();
                     MovesLeft -= sailhome.MovesWasted;
+                    UsedPirates.Add(mp);
                 }
             }
-            #endregion
+            #endregion  //Finshed need to be follished 
 
             #region Attacking and crashing the enemy
+            List<Pirate> PossibleAttackers = Game.MyPiratesWithoutTreasures();
+            List<Pirate> Targets = new List<Pirate>();
 
+            foreach(Pirate ep in Game.EnemyPirates())
+            {
+            if(ep.TurnsToSober == 0 && ep.TurnsToRevive == 0 && (ep.HasTreasure|| ep.Powerups.Count >0))
+                Targets.Add(ep);
+            }
+
+            List<Pirate> Attackers = new List<Pirate>();
+            foreach (Pirate p in PossibleAttackers)
+            {
+                if (p.TurnsToSober == 0 && p.TurnsToRevive == 0 && !UsedPirates.Contains(p))
+                {
+                    Attackers.Add(p);
+                }
+            }
+
+            DefualtActionAttackOrCrash AoC = new DefualtActionAttackOrCrash();
+            AoC.game = Game;
+            AoC.MovesLeft = MovesLeft;
+            AoC.CA = CA;
+
+            AoC.FindBestMatchWithScore(Attackers, Targets);
+            AoC.DoTurn();
+            if (AoC.hasmoves)
+            {
+                MovesLeft -= AoC.MovesWasted;
+                UsedPirates.Add(AoC.Attacker);
+            }
             #endregion
 
             #region Tresures and Powerups Collectiong
@@ -1693,7 +1724,36 @@ namespace MyBot
             //game.Debug("Attacker = {0} , Target = {1}", Attacker.Id, Target.Id);
 
         } // Need To Updated to the new 
+        public void FindBestMatchWithScore(List<Pirate> MyPirates, List<Pirate> EnemyPirates)
+        {
+            double Min = 1000;
+            Pirate myPirate = MyPirates[0];
+            Pirate enemyPirate = EnemyPirates[0];
+            foreach (Pirate mp in MyPirates)
+            {
+                foreach (Pirate ep in EnemyPirates)
+                {
+                    double score = Score(mp, ep);
+                    if (score != -1 && score < Min)
+                    {
+                        Min = score;
+                        myPirate = mp;
+                        enemyPirate = ep;
+                    }
+                }
+            }
 
+            if (Min < 1000)
+            {
+                this.Attacker = myPirate;
+                this.Target = enemyPirate;
+            }
+            else
+            {
+                this.Attacker = null;
+                this.Target = null;
+            }
+        }
         private double Score(Pirate MyPirate, Pirate EnemyPirate)
         {
             if (!CanReach(MyPirate, EnemyPirate))
@@ -1701,10 +1761,10 @@ namespace MyBot
             else
             {
                 double a = game.Distance(EnemyPirate.Location, EnemyPirate.InitialLocation);
-                double b = game.Distance(MyPirate.Location, EnemyPirate.Location)/(game.GetActionsPerTurn()- game.MyPiratesWithTreasures().Count);
+                double b = game.Distance(MyPirate.Location, EnemyPirate.Location) / (game.GetActionsPerTurn() - game.MyPiratesWithTreasures().Count);
                 double c = EnemyPirate.TreasureValue;
-                if(EnemyPirate.Powerups.Count >0)
-                return   (a + b) / (c + 5);
+                if (EnemyPirate.Powerups.Count > 0)
+                    return (a + b) / (c + 5);
 
                 return (a + b) / c;
             }
@@ -1727,42 +1787,48 @@ namespace MyBot
             if (Attacker != null && Target != null)
             {
                 game.Debug("Pirate {0} is in attacking Mode, Target = {1}", Attacker.Id, Target.Id);
-            }
 
-            int DistanceFromTarget = game.Distance(Attacker, Target);
 
-            int index = 0;
+                int DistanceFromTarget = game.Distance(Attacker, Target);
 
-            if (game.InRange(Attacker, Target) == false)
-                index = 0; // GoToTarget
-            if (game.InRange(Attacker, Target) && Target.DefenseExpirationTurns == 0 && Target.DefenseReloadTurns > 0 && Target.Powerups.Count == 0)
-                index = 1;// ShootTarget
-            if (game.InRange(Attacker, Target) && Target.DefenseExpirationTurns == 0 && Target.DefenseReloadTurns == 0 && Target.Powerups.Count == 0 && game.Distance(Target.Location, Target.InitialLocation) > Target.DefenseExpirationTurns)
-                index = 2; // Chase Target
-            if (game.InRange(Attacker, Target) && (Target.DefenseExpirationTurns > 0 || Target.Powerups.Count > 0))
-                index = 3; // CarshTarget
+                int index = 0;
 
-            game.Debug(" index ==>{0}", index);
+                if (game.InRange(Attacker, Target) == false)
+                    index = 0; // GoToTarget
+                if (game.InRange(Attacker, Target) && Target.DefenseExpirationTurns == 0 && Target.DefenseReloadTurns > 0 && Target.Powerups.Count == 0)
+                    index = 1;// ShootTarget
+                if (game.InRange(Attacker, Target) && Target.DefenseExpirationTurns == 0 && Target.DefenseReloadTurns == 0 && Target.Powerups.Count == 0 && game.Distance(Target.Location, Target.InitialLocation) > Target.DefenseExpirationTurns)
+                    index = 2; // Chase Target
+                if (game.InRange(Attacker, Target) && (Target.DefenseExpirationTurns > 0 || Target.Powerups.Count > 0))
+                    index = 3; // CarshTarget
 
-            switch (index)
-            {
-                case 0:
-                    hasmoves = GoToTarget();
-                    break;
-                case 1:
-                    hasmoves = ShootTarget();
-                    if (hasmoves)
-                        return;
-                    break;
-                case 2:
-                    hasmoves = ChaseTarget();
-                    break;
-                case 3:
-                    hasmoves = CrashTarget(); // might change to crash, not sure yet
-                    break;
 
-                default: game.Debug("an error was made");
-                    break;
+                if (Attacker.ReloadTurns > 0 && game.InRange(Attacker, Target))
+                {
+                    index = 3;
+                }
+                game.Debug(" index ==>{0}", index);
+
+                switch (index)
+                {
+                    case 0:
+                        hasmoves = GoToTarget();
+                        break;
+                    case 1:
+                        hasmoves = ShootTarget();
+                        if (hasmoves)
+                            return;
+                        break;
+                    case 2:
+                        hasmoves = ChaseTarget();
+                        break;
+                    case 3:
+                        hasmoves = CrashTarget(); // might change to crash, not sure yet
+                        break;
+
+                    default: game.Debug("an error was made");
+                        break;
+                }
             }
 
 
@@ -1842,6 +1908,19 @@ namespace MyBot
         }
     }
 
+    public class DefualtActionCollctingTresuresAndPowerups
+    {
+        public Pirate Collector ;
+        public Treasure TresasureDest;
+        public Powerup PowerUpDest;
+        public IPirateGame Game;
+        public CollisionAvoider CA;
+        public double PowerUpScore()
+        {
+            return 1;
+
+        }
+    }
     #endregion
 
     #endregion
